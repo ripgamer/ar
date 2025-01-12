@@ -7,6 +7,7 @@ import { ARButton } from 'three/examples/jsm/webxr/ARButton'
 export function WebARHolographicCard() {
   const containerRef = useRef(null)
   const [isARSupported, setIsARSupported] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -14,20 +15,32 @@ export function WebARHolographicCard() {
     // Set up Three.js scene
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance",
+    })
+    
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight)
     renderer.xr.enabled = true
     containerRef.current.appendChild(renderer.domElement)
 
-    // Create AR button
+    // Create AR button with more specific options
     const arButton = ARButton.createButton(renderer, {
-      optionalFeatures: ['dom-overlay'],
-      domOverlay: { root: document.body }
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay', 'camera-access'],
+      domOverlay: { root: document.body },
+      sessionInit: {
+        requiredFeatures: ['local', 'hit-test'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.body }
+      }
     })
     document.body.appendChild(arButton)
 
     // Create card geometry (using aspect ratio of a typical trading card)
-    const geometry = new THREE.PlaneGeometry(1, 1.4)
+    const geometry = new THREE.PlaneGeometry(0.5, 0.7) // Made smaller for better AR scale
 
     // Load card texture
     const textureLoader = new THREE.TextureLoader()
@@ -45,11 +58,11 @@ export function WebARHolographicCard() {
 
     // Create card mesh
     const card = new THREE.Mesh(geometry, material)
-    card.position.set(0, 0, -2) // Position the card 2 units in front of the camera
+    card.position.set(0, 0, -1) // Moved closer to camera
     scene.add(card)
 
     // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1)
     scene.add(ambientLight)
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
@@ -59,16 +72,18 @@ export function WebARHolographicCard() {
     // Add holographic effect
     const clock = new THREE.Clock()
     
-    // Animation loop
-    renderer.setAnimationLoop(() => {
-      const time = clock.getElapsedTime()
+    // Animation loop with AR session handling
+    function onXRFrame(timestamp, frame) {
+      const elapsedTime = clock.getElapsedTime()
       
       // Add subtle floating animation
-      card.position.y = Math.sin(time) * 0.1 - 0.5
-      card.rotation.y = Math.sin(time * 0.5) * 0.2
+      card.position.y = Math.sin(elapsedTime) * 0.05 - 0.25 // Reduced movement
+      card.rotation.y = Math.sin(elapsedTime * 0.5) * 0.1 // Reduced rotation
       
       renderer.render(scene, camera)
-    })
+    }
+    
+    renderer.setAnimationLoop(onXRFrame)
 
     // Handle resize
     const handleResize = () => {
@@ -78,9 +93,29 @@ export function WebARHolographicCard() {
     }
     window.addEventListener('resize', handleResize)
 
-    // Check AR support
-    navigator.xr?.isSessionSupported('immersive-ar').then(supported => {
-      setIsARSupported(supported)
+    // Check AR support with error handling
+    if (navigator.xr) {
+      navigator.xr.isSessionSupported('immersive-ar')
+        .then(supported => {
+          setIsARSupported(supported)
+          if (!supported) {
+            setError('AR is not supported on this device')
+          }
+        })
+        .catch(err => {
+          setError('Error checking AR support: ' + err.message)
+        })
+    } else {
+      setError('WebXR is not available in your browser')
+    }
+
+    // Handle AR session
+    renderer.xr.addEventListener('sessionstart', () => {
+      console.log('AR session started')
+    })
+
+    renderer.xr.addEventListener('sessionend', () => {
+      console.log('AR session ended')
     })
 
     return () => {
@@ -100,7 +135,7 @@ export function WebARHolographicCard() {
     <div ref={containerRef} className="absolute top-0 left-0 w-full h-full">
       {!isARSupported && (
         <div className="absolute top-0 left-0 w-full p-4 bg-black bg-opacity-50 text-white text-center">
-          AR is not supported on this device or browser
+          {error || 'AR is not supported on this device or browser'}
         </div>
       )}
     </div>
