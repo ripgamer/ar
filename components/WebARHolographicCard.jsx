@@ -18,7 +18,6 @@ export function WebARHolographicCard() {
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
       alpha: true,
-      powerPreference: "high-performance",
     })
     
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -26,13 +25,9 @@ export function WebARHolographicCard() {
     renderer.xr.enabled = true
     containerRef.current.appendChild(renderer.domElement)
 
-    // Create AR button with more specific options
+    // Create AR button with simplified options
     const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay', 'camera-access'],
-      domOverlay: { root: document.body },
       sessionInit: {
-        requiredFeatures: ['local', 'hit-test'],
         optionalFeatures: ['dom-overlay'],
         domOverlay: { root: document.body }
       }
@@ -40,7 +35,7 @@ export function WebARHolographicCard() {
     document.body.appendChild(arButton)
 
     // Create card geometry (using aspect ratio of a typical trading card)
-    const geometry = new THREE.PlaneGeometry(0.5, 0.7) // Made smaller for better AR scale
+    const geometry = new THREE.PlaneGeometry(0.5, 0.7)
 
     // Load card texture
     const textureLoader = new THREE.TextureLoader()
@@ -58,7 +53,7 @@ export function WebARHolographicCard() {
 
     // Create card mesh
     const card = new THREE.Mesh(geometry, material)
-    card.position.set(0, 0, -1) // Moved closer to camera
+    card.position.set(0, 0, -1)
     scene.add(card)
 
     // Add lights
@@ -69,21 +64,11 @@ export function WebARHolographicCard() {
     directionalLight.position.set(5, 5, 5)
     scene.add(directionalLight)
 
-    // Add holographic effect
-    const clock = new THREE.Clock()
-    
-    // Animation loop with AR session handling
-    function onXRFrame(timestamp, frame) {
-      const elapsedTime = clock.getElapsedTime()
-      
-      // Add subtle floating animation
-      card.position.y = Math.sin(elapsedTime) * 0.05 - 0.25 // Reduced movement
-      card.rotation.y = Math.sin(elapsedTime * 0.5) * 0.1 // Reduced rotation
-      
+    // Animation loop
+    renderer.setAnimationLoop((currentTime) => {
+      card.rotation.y = Math.sin(currentTime * 0.001) * 0.1
       renderer.render(scene, camera)
-    }
-    
-    renderer.setAnimationLoop(onXRFrame)
+    })
 
     // Handle resize
     const handleResize = () => {
@@ -93,7 +78,7 @@ export function WebARHolographicCard() {
     }
     window.addEventListener('resize', handleResize)
 
-    // Check AR support with error handling
+    // Check AR support
     if (navigator.xr) {
       navigator.xr.isSessionSupported('immersive-ar')
         .then(supported => {
@@ -108,15 +93,6 @@ export function WebARHolographicCard() {
     } else {
       setError('WebXR is not available in your browser')
     }
-
-    // Handle AR session
-    renderer.xr.addEventListener('sessionstart', () => {
-      console.log('AR session started')
-    })
-
-    renderer.xr.addEventListener('sessionend', () => {
-      console.log('AR session ended')
-    })
 
     return () => {
       window.removeEventListener('resize', handleResize)
