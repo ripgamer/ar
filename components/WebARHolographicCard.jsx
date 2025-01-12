@@ -1,119 +1,84 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import * as THREE from 'three'
-import { ARButton } from 'three/examples/jsm/webxr/ARButton'
+import Script from 'next/script'
+import { HolographicCard } from './HolographicCard'
 
 export function WebARHolographicCard() {
-  const containerRef = useRef(null)
-  const [isARSupported, setIsARSupported] = useState(false)
-  const [error, setError] = useState('')
+  const sceneRef = useRef(null)
+  const [scriptsLoaded, setScriptsLoaded] = useState(false)
 
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    // Set up Three.js scene
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: true,
-    })
-    
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.xr.enabled = true
-    containerRef.current.appendChild(renderer.domElement)
-
-    // Create AR button with simplified options
-    const arButton = ARButton.createButton(renderer, {
-      sessionInit: {
-        optionalFeatures: ['dom-overlay'],
-        domOverlay: { root: document.body }
-      }
-    })
-    document.body.appendChild(arButton)
-
-    // Create card geometry (using aspect ratio of a typical trading card)
-    const geometry = new THREE.PlaneGeometry(0.5, 0.7)
-
-    // Load card texture
-    const textureLoader = new THREE.TextureLoader()
-    const material = new THREE.MeshStandardMaterial({
-      side: THREE.DoubleSide,
-      metalness: 0.5,
-      roughness: 0.2,
-    })
-
-    // Load the Charizard texture
-    textureLoader.load('https://assets.codepen.io/13471/charizard-gx.webp', (texture) => {
-      material.map = texture
-      material.needsUpdate = true
-    })
-
-    // Create card mesh
-    const card = new THREE.Mesh(geometry, material)
-    card.position.set(0, 0, -1)
-    scene.add(card)
-
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1)
-    scene.add(ambientLight)
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-    directionalLight.position.set(5, 5, 5)
-    scene.add(directionalLight)
-
-    // Animation loop
-    renderer.setAnimationLoop((currentTime) => {
-      card.rotation.y = Math.sin(currentTime * 0.001) * 0.1
-      renderer.render(scene, camera)
-    })
-
-    // Handle resize
-    const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight
-      camera.updateProjectionMatrix()
-      renderer.setSize(window.innerWidth, window.innerHeight)
-    }
-    window.addEventListener('resize', handleResize)
-
-    // Check AR support
-    if (navigator.xr) {
-      navigator.xr.isSessionSupported('immersive-ar')
-        .then(supported => {
-          setIsARSupported(supported)
-          if (!supported) {
-            setError('AR is not supported on this device')
-          }
-        })
-        .catch(err => {
-          setError('Error checking AR support: ' + err.message)
-        })
-    } else {
-      setError('WebXR is not available in your browser')
-    }
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      renderer.setAnimationLoop(null)
-      if (containerRef.current) {
-        containerRef.current.removeChild(renderer.domElement)
-      }
-      const arButtonElement = document.querySelector('button[data-xr-type="ar"]')
-      if (arButtonElement) {
-        document.body.removeChild(arButtonElement)
-      }
-    }
-  }, [])
+  const handleScriptsLoaded = () => {
+    setScriptsLoaded(true)
+  }
 
   return (
-    <div ref={containerRef} className="absolute top-0 left-0 w-full h-full">
-      {!isARSupported && (
-        <div className="absolute top-0 left-0 w-full p-4 bg-black bg-opacity-50 text-white text-center">
-          {error || 'AR is not supported on this device or browser'}
+    <>
+      <Script 
+        src="https://aframe.io/releases/1.4.0/aframe.min.js"
+        strategy="beforeInteractive"
+        onLoad={() => {
+          // Load AR.js after A-Frame is loaded
+          const arScript = document.createElement('script')
+          arScript.src = 'https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'
+          arScript.onload = handleScriptsLoaded
+          document.body.appendChild(arScript)
+        }}
+      />
+
+      <div className="relative w-full min-h-screen">
+        {/* Regular card view */}
+        <div className="absolute top-0 left-0 w-1/2 h-screen flex items-center justify-center">
+          <HolographicCard />
         </div>
-      )}
-    </div>
+        
+        {/* AR view */}
+        <div className="absolute top-0 right-0 w-1/2 h-screen">
+          {scriptsLoaded && (
+            <div ref={sceneRef} style={{ width: '100%', height: '100%' }}>
+              <a-scene
+                embedded
+                arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+                vr-mode-ui="enabled: false"
+              >
+                <a-assets>
+                  <img 
+                    id="card-texture" 
+                    src="https://assets.codepen.io/13471/charizard-gx.webp" 
+                    crossOrigin="anonymous"
+                  />
+                </a-assets>
+
+                <a-marker preset="hiro">
+                  <a-plane
+                    position="0 0 0"
+                    rotation="-90 0 0"
+                    width="1"
+                    height="1.4"
+                    material="src: #card-texture; transparent: true;"
+                  ></a-plane>
+                </a-marker>
+
+                <a-entity camera></a-entity>
+              </a-scene>
+            </div>
+          )}
+
+          {/* Download marker message */}
+          <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
+            <p>Print or display the Hiro marker:</p>
+            <a 
+              href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/HIRO.jpg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300"
+            >
+              Download Hiro Marker
+            </a>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
+
