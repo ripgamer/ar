@@ -7,6 +7,7 @@ import { ARButton } from 'three/examples/jsm/webxr/ARButton'
 export function WebARHolographicCard() {
   const containerRef = useRef(null)
   const [isSupported, setIsSupported] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -24,20 +25,46 @@ export function WebARHolographicCard() {
     renderer.xr.enabled = true
     containerRef.current.appendChild(renderer.domElement)
 
-    // Check AR support
-    navigator.xr?.isSessionSupported('immersive-ar')
-      .then((supported) => {
+    // Check AR support and initialize
+    async function initAR() {
+      try {
+        const supported = await navigator.xr?.isSessionSupported('immersive-ar')
         setIsSupported(supported)
+        
         if (supported) {
-          // Add AR button
           const arButton = ARButton.createButton(renderer, {
-            requiredFeatures: ['hit-test'],
+            requiredFeatures: ['hit-test', 'camera-access'],
             optionalFeatures: ['dom-overlay'],
-            domOverlay: { root: document.body }
+            domOverlay: { root: document.body },
+            sessionInit: {
+              requiredPermissions: ['camera'],
+            }
           })
+          
+          // Style the AR button
+          arButton.style.position = 'absolute'
+          arButton.style.bottom = '20px'
+          arButton.style.left = '50%'
+          arButton.style.transform = 'translateX(-50%)'
+          arButton.style.padding = '12px 24px'
+          arButton.style.border = 'none'
+          arButton.style.borderRadius = '4px'
+          arButton.style.background = '#4CAF50'
+          arButton.style.color = 'white'
+          arButton.style.cursor = 'pointer'
+          arButton.style.fontWeight = 'bold'
+          
           document.body.appendChild(arButton)
+        } else {
+          setError('AR is not supported on this device')
         }
-      })
+      } catch (err) {
+        setError(err.message)
+        console.error('AR initialization error:', err)
+      }
+    }
+
+    initAR()
 
     // Add lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 1)
@@ -48,7 +75,7 @@ export function WebARHolographicCard() {
     scene.add(directionalLight)
 
     // Create card
-    const cardGeometry = new THREE.PlaneGeometry(0.5, 0.7) // Smaller size for AR
+    const cardGeometry = new THREE.PlaneGeometry(0.5, 0.7)
     const textureLoader = new THREE.TextureLoader()
 
     // Load card texture
@@ -61,7 +88,7 @@ export function WebARHolographicCard() {
       })
 
       const card = new THREE.Mesh(cardGeometry, cardMaterial)
-      card.position.set(0, 0, -1) // Position in front of camera initially
+      card.position.set(0, 0, -1)
       scene.add(card)
 
       // Add holographic effect
@@ -108,20 +135,28 @@ export function WebARHolographicCard() {
 
       // Handle XR Session
       renderer.xr.addEventListener('sessionstart', async () => {
-        const session = renderer.xr.getSession()
-        
-        const viewerReferenceSpace = await session.requestReferenceSpace('viewer')
-        const hitTestSource = await session.requestHitTestSource({
-          space: viewerReferenceSpace
-        })
+        try {
+          const session = renderer.xr.getSession()
+          
+          // Request reference space after session starts
+          const viewerReferenceSpace = await session.requestReferenceSpace('viewer')
+          const localReferenceSpace = await session.requestReferenceSpace('local')
+          renderer.xr.setReferenceSpace(localReferenceSpace)
+          
+          hitTestSource = await session.requestHitTestSource({
+            space: viewerReferenceSpace
+          })
 
-        session.addEventListener('select', () => {
-          // Place card where user taps
-          if (reticle.visible) {
-            card.position.setFromMatrixPosition(reticle.matrix)
-            card.visible = true
-          }
-        })
+          session.addEventListener('select', () => {
+            if (reticle.visible) {
+              card.position.setFromMatrixPosition(reticle.matrix)
+              card.visible = true
+            }
+          })
+        } catch (err) {
+          setError('Error starting AR session: ' + err.message)
+          console.error('Session start error:', err)
+        }
       })
 
       // Create reticle for placement
@@ -141,15 +176,6 @@ export function WebARHolographicCard() {
         if (frame) {
           const referenceSpace = renderer.xr.getReferenceSpace()
           const session = renderer.xr.getSession()
-
-          if (hitTestSourceRequested === false) {
-            session.requestReferenceSpace('viewer').then((referenceSpace) => {
-              session.requestHitTestSource({ space: referenceSpace }).then((source) => {
-                hitTestSource = source
-              })
-            })
-            hitTestSourceRequested = true
-          }
 
           if (hitTestSource) {
             const hitTestResults = frame.getHitTestResults(hitTestSource)
@@ -195,6 +221,12 @@ export function WebARHolographicCard() {
         <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
           <p>WebXR AR is not supported on your device.</p>
           <p>Please use a compatible mobile device with AR support.</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute top-4 left-4 bg-red-500 bg-opacity-50 text-white p-4 rounded">
+          <p>Error: {error}</p>
         </div>
       )}
 
