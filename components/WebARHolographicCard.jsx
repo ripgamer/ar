@@ -1,59 +1,38 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { ARButton } from 'three/examples/jsm/webxr/ARButton'
 
 export function WebARHolographicCard() {
   const containerRef = useRef(null)
-  const [isARSupported, setIsARSupported] = useState(false)
-  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Set up Three.js scene
+    // Set up scene
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: true,
-    })
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     
-    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.xr.enabled = true
+    renderer.setClearColor(0x000000, 0)
     containerRef.current.appendChild(renderer.domElement)
 
-    // Create AR button with simplified options
-    const arButton = ARButton.createButton(renderer, {
-      sessionInit: {
-        optionalFeatures: ['dom-overlay'],
-        domOverlay: { root: document.body }
-      }
-    })
-    document.body.appendChild(arButton)
-
-    // Create card geometry (using aspect ratio of a typical trading card)
-    const geometry = new THREE.PlaneGeometry(0.5, 0.7)
-
-    // Load card texture
+    // Create card
+    const geometry = new THREE.PlaneGeometry(1, 1.4)
     const textureLoader = new THREE.TextureLoader()
     const material = new THREE.MeshStandardMaterial({
       side: THREE.DoubleSide,
-      metalness: 0.5,
-      roughness: 0.2,
+      transparent: true,
     })
 
-    // Load the Charizard texture
+    // Load texture
     textureLoader.load('https://assets.codepen.io/13471/charizard-gx.webp', (texture) => {
       material.map = texture
       material.needsUpdate = true
     })
 
-    // Create card mesh
     const card = new THREE.Mesh(geometry, material)
-    card.position.set(0, 0, -1)
     scene.add(card)
 
     // Add lights
@@ -64,11 +43,37 @@ export function WebARHolographicCard() {
     directionalLight.position.set(5, 5, 5)
     scene.add(directionalLight)
 
+    // Position camera and card
+    camera.position.z = 2
+    card.position.set(0, 0, -0.5)
+
+    // Animation
+    let mouseX = 0
+    let mouseY = 0
+    let targetRotationX = 0
+    let targetRotationY = 0
+
+    const handleMouseMove = (event) => {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1
+      mouseY = -(event.clientY / window.innerHeight) * 2 + 1
+
+      targetRotationX = mouseY * 0.5
+      targetRotationY = mouseX * 0.5
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+
     // Animation loop
-    renderer.setAnimationLoop((currentTime) => {
-      card.rotation.y = Math.sin(currentTime * 0.001) * 0.1
+    const animate = () => {
+      requestAnimationFrame(animate)
+
+      // Smooth rotation
+      card.rotation.x += (targetRotationX - card.rotation.x) * 0.05
+      card.rotation.y += (targetRotationY - card.rotation.y) * 0.05
+
       renderer.render(scene, camera)
-    })
+    }
+    animate()
 
     // Handle resize
     const handleResize = () => {
@@ -78,42 +83,24 @@ export function WebARHolographicCard() {
     }
     window.addEventListener('resize', handleResize)
 
-    // Check AR support
-    if (navigator.xr) {
-      navigator.xr.isSessionSupported('immersive-ar')
-        .then(supported => {
-          setIsARSupported(supported)
-          if (!supported) {
-            setError('AR is not supported on this device')
-          }
-        })
-        .catch(err => {
-          setError('Error checking AR support: ' + err.message)
-        })
-    } else {
-      setError('WebXR is not available in your browser')
-    }
-
+    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize)
-      renderer.setAnimationLoop(null)
-      if (containerRef.current) {
-        containerRef.current.removeChild(renderer.domElement)
-      }
-      const arButtonElement = document.querySelector('button[data-xr-type="ar"]')
-      if (arButtonElement) {
-        document.body.removeChild(arButtonElement)
-      }
+      window.removeEventListener('mousemove', handleMouseMove)
+      containerRef.current?.removeChild(renderer.domElement)
+      renderer.dispose()
     }
   }, [])
 
   return (
-    <div ref={containerRef} className="absolute top-0 left-0 w-full h-full">
-      {!isARSupported && (
-        <div className="absolute top-0 left-0 w-full p-4 bg-black bg-opacity-50 text-white text-center">
-          {error || 'AR is not supported on this device or browser'}
-        </div>
-      )}
+    <div className="w-full h-screen">
+      <div ref={containerRef} className="w-full h-full" />
+      
+      {/* Instructions */}
+      <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
+        <p>Move your mouse to rotate the card in 3D.</p>
+      </div>
     </div>
   )
 }
+
