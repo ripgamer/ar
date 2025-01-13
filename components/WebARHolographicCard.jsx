@@ -1,84 +1,106 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import Script from 'next/script'
-import { HolographicCard } from './HolographicCard'
+import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
 
 export function WebARHolographicCard() {
-  const sceneRef = useRef(null)
-  const [scriptsLoaded, setScriptsLoaded] = useState(false)
+  const containerRef = useRef(null)
 
-  const handleScriptsLoaded = () => {
-    setScriptsLoaded(true)
-  }
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    // Set up scene
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.setClearColor(0x000000, 0)
+    containerRef.current.appendChild(renderer.domElement)
+
+    // Create card
+    const geometry = new THREE.PlaneGeometry(1, 1.4)
+    const textureLoader = new THREE.TextureLoader()
+    const material = new THREE.MeshStandardMaterial({
+      side: THREE.DoubleSide,
+      transparent: true,
+    })
+
+    // Load texture
+    textureLoader.load('https://assets.codepen.io/13471/charizard-gx.webp', (texture) => {
+      material.map = texture
+      material.needsUpdate = true
+    })
+
+    const card = new THREE.Mesh(geometry, material)
+    scene.add(card)
+
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1)
+    scene.add(ambientLight)
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
+    directionalLight.position.set(5, 5, 5)
+    scene.add(directionalLight)
+
+    // Position camera and card
+    camera.position.z = 2
+    card.position.set(0, 0, -0.5)
+
+    // Animation
+    let mouseX = 0
+    let mouseY = 0
+    let targetRotationX = 0
+    let targetRotationY = 0
+
+    const handleMouseMove = (event) => {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1
+      mouseY = -(event.clientY / window.innerHeight) * 2 + 1
+
+      targetRotationX = mouseY * 0.5
+      targetRotationY = mouseX * 0.5
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+
+    // Animation loop
+    const animate = () => {
+      requestAnimationFrame(animate)
+
+      // Smooth rotation
+      card.rotation.x += (targetRotationX - card.rotation.x) * 0.05
+      card.rotation.y += (targetRotationY - card.rotation.y) * 0.05
+
+      renderer.render(scene, camera)
+    }
+    animate()
+
+    // Handle resize
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('resize', handleResize)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('mousemove', handleMouseMove)
+      containerRef.current?.removeChild(renderer.domElement)
+      renderer.dispose()
+    }
+  }, [])
 
   return (
-    <>
-      <Script 
-        src="https://aframe.io/releases/1.4.0/aframe.min.js"
-        strategy="beforeInteractive"
-        onLoad={() => {
-          // Load AR.js after A-Frame is loaded
-          const arScript = document.createElement('script')
-          arScript.src = 'https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'
-          arScript.onload = handleScriptsLoaded
-          document.body.appendChild(arScript)
-        }}
-      />
-
-      <div className="relative w-full min-h-screen">
-        {/* Regular card view */}
-        <div className="absolute top-0 left-0 w-1/2 h-screen flex items-center justify-center">
-          <HolographicCard />
-        </div>
-        
-        {/* AR view */}
-        <div className="absolute top-0 right-0 w-1/2 h-screen">
-          {scriptsLoaded && (
-            <div ref={sceneRef} style={{ width: '100%', height: '100%' }}>
-              <a-scene
-                embedded
-                arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
-                vr-mode-ui="enabled: false"
-              >
-                <a-assets>
-                  <img 
-                    id="card-texture" 
-                    src="https://assets.codepen.io/13471/charizard-gx.webp" 
-                    crossOrigin="anonymous"
-                  />
-                </a-assets>
-
-                <a-marker preset="hiro">
-                  <a-plane
-                    position="0 0 0"
-                    rotation="-90 0 0"
-                    width="1"
-                    height="1.4"
-                    material="src: #card-texture; transparent: true;"
-                  ></a-plane>
-                </a-marker>
-
-                <a-entity camera></a-entity>
-              </a-scene>
-            </div>
-          )}
-
-          {/* Download marker message */}
-          <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
-            <p>Print or display the Hiro marker:</p>
-            <a 
-              href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/HIRO.jpg"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300"
-            >
-              Download Hiro Marker
-            </a>
-          </div>
-        </div>
+    <div className="w-full h-screen">
+      <div ref={containerRef} className="w-full h-full" />
+      
+      {/* Instructions */}
+      <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
+        <p>Move your mouse to rotate the card in 3D.</p>
       </div>
-    </>
+    </div>
   )
 }
 

@@ -1,14 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import dynamic from 'next/dynamic'
 import { HolographicCard } from '@/components/HolographicCard'
-
-// Dynamically import the AR component to avoid SSR issues
-const WebARHolographicCard = dynamic(
-  () => import('@/components/WebARHolographicCard').then(mod => mod.WebARHolographicCard),
-  { ssr: false }
-)
+import { WebARHolographicCard } from '@/components/WebARHolographicCard'
 
 export default function Home() {
   const [showAR, setShowAR] = useState(false)
@@ -20,7 +14,7 @@ export default function Home() {
           onClick={() => setShowAR(!showAR)}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
-          {showAR ? 'Show Regular View' : 'Show AR View'}
+          {showAR ? 'Show Regular View' : 'Show 3D View'}
         </button>
       </div>
       
