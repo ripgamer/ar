@@ -1,106 +1,95 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import * as THREE from 'three'
+import { useEffect, useRef, useState } from 'react'
+import Head from 'next/head'
 
 export function WebARHolographicCard() {
-  const containerRef = useRef(null)
+  const sceneRef = useRef(null)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (typeof window !== 'undefined') {
+      // Check if scripts are already loaded
+      if (!document.querySelector('script[src*="aframe.min.js"]')) {
+        const aframeScript = document.createElement('script')
+        aframeScript.src = 'https://aframe.io/releases/1.4.0/aframe.min.js'
+        aframeScript.async = true
+        document.body.appendChild(aframeScript)
 
-    // Set up scene
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-    
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.setClearColor(0x000000, 0)
-    containerRef.current.appendChild(renderer.domElement)
+        aframeScript.onload = () => {
+          const arScript = document.createElement('script')
+          arScript.src = 'https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'
+          arScript.async = true
+          document.body.appendChild(arScript)
 
-    // Create card
-    const geometry = new THREE.PlaneGeometry(1, 1.4)
-    const textureLoader = new THREE.TextureLoader()
-    const material = new THREE.MeshStandardMaterial({
-      side: THREE.DoubleSide,
-      transparent: true,
-    })
-
-    // Load texture
-    textureLoader.load('https://assets.codepen.io/13471/charizard-gx.webp', (texture) => {
-      material.map = texture
-      material.needsUpdate = true
-    })
-
-    const card = new THREE.Mesh(geometry, material)
-    scene.add(card)
-
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1)
-    scene.add(ambientLight)
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-    directionalLight.position.set(5, 5, 5)
-    scene.add(directionalLight)
-
-    // Position camera and card
-    camera.position.z = 2
-    card.position.set(0, 0, -0.5)
-
-    // Animation
-    let mouseX = 0
-    let mouseY = 0
-    let targetRotationX = 0
-    let targetRotationY = 0
-
-    const handleMouseMove = (event) => {
-      mouseX = (event.clientX / window.innerWidth) * 2 - 1
-      mouseY = -(event.clientY / window.innerHeight) * 2 + 1
-
-      targetRotationX = mouseY * 0.5
-      targetRotationY = mouseX * 0.5
+          arScript.onload = () => {
+            setIsLoaded(true)
+          }
+        }
+      } else {
+        setIsLoaded(true)
+      }
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-
-    // Animation loop
-    const animate = () => {
-      requestAnimationFrame(animate)
-
-      // Smooth rotation
-      card.rotation.x += (targetRotationX - card.rotation.x) * 0.05
-      card.rotation.y += (targetRotationY - card.rotation.y) * 0.05
-
-      renderer.render(scene, camera)
-    }
-    animate()
-
-    // Handle resize
-    const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight
-      camera.updateProjectionMatrix()
-      renderer.setSize(window.innerWidth, window.innerHeight)
-    }
-    window.addEventListener('resize', handleResize)
-
-    // Cleanup
     return () => {
-      window.removeEventListener('resize', handleResize)
-      window.removeEventListener('mousemove', handleMouseMove)
-      containerRef.current?.removeChild(renderer.domElement)
-      renderer.dispose()
+      const scripts = document.querySelectorAll('script[src*="aframe"], script[src*="ar.js"]')
+      scripts.forEach(script => script.remove())
     }
   }, [])
 
-  return (
-    <div className="w-full h-screen">
-      <div ref={containerRef} className="w-full h-full" />
-      
-      {/* Instructions */}
-      <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded">
-        <p>Move your mouse to rotate the card in 3D.</p>
+  if (!isLoaded) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 text-white">
+        Loading AR Experience...
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
+      </Head>
+
+      <div style={{ height: '100vh', width: '100vw', position: 'fixed', top: 0, left: 0 }}>
+        <a-scene
+          ref={sceneRef}
+          embedded
+          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+          renderer="logarithmicDepthBuffer: true; antialias: true; alpha: true"
+          vr-mode-ui="enabled: false"
+        >
+          <a-marker preset="hiro" smooth="true" smoothCount="10">
+            <a-entity
+              position="0 0.1 0"
+              rotation="-90 0 0"
+            >
+              <a-plane
+                width="1"
+                height="1.4"
+                material="shader: flat; src: https://assets.codepen.io/13471/charizard-gx.webp; transparent: true; opacity: 1"
+              ></a-plane>
+            </a-entity>
+          </a-marker>
+
+          <a-entity camera></a-entity>
+        </a-scene>
+
+        {/* Instructions */}
+        <div className="fixed top-4 left-4 bg-black bg-opacity-50 text-white p-4 rounded z-50">
+          <p className="mb-2">Show the Hiro marker to your camera:</p>
+          <a 
+            href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/HIRO.jpg"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+            download="hiro-marker.jpg"
+          >
+            Download Hiro Marker
+          </a>
+        </div>
+      </div>
+    </>
   )
 }
 
